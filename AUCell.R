@@ -90,30 +90,6 @@ VlnPlot(
   theme_classic()
 
 
-
-library(ggplot2)
-
-epi_epi@meta.data %>%
-  ggplot(aes(x = CancerType, y = Glyco_AUCell, fill = CancerType)) +
-  geom_boxplot(outlier.shape = NA) +
-  theme_classic() +
-  labs(
-    y = "Glycogene AUCell score",
-    x = ""
-  ) +
-  theme(legend.position = "none")
-
-
-
-VlnPlot(
-  epi_epi,
-  features = "Glyco_AUCell",
-  group.by = "CancerType",
-  split.by = "Type",
-  pt.size = 0.001,
-  cols = pub.colors
-)
-
 #----------------
 # Median
 #----------------
@@ -124,11 +100,6 @@ epi_epi$GT_AUC_Group <- ifelse(
   epi_epi$Glyco_AUCell >= median_auc,
   "High_GT_AUC",
   "Low_GT_AUC"
-)
-
-epi_epi$GT_AUC_Group <- factor(
-  epi_epi$GT_AUC_Group,
-  levels = c("Low_GT_AUC", "High_GT_AUC")
 )
 
 table(epi_epi$GT_AUC_Group)
@@ -163,21 +134,6 @@ write.table(
   row.names = FALSE,
   col.names = FALSE
 )
-
-
-VlnPlot(
-  epi_epi,
-  features = "Glyco_AUCell",
-  group.by = "GT_AUC_Group",
-  pt.size = 0
-) +
-  theme_classic()
-
-top_genes <- head(
-  rownames(deg_GT_AUC_sig[order(deg_GT_AUC_sig$avg_log2FC, decreasing = TRUE), ]),
-  10
-)
-
 DoHeatmap(
   epi_epi,
   features = top_genes,
