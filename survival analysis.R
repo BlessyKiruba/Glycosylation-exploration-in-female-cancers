@@ -1,18 +1,14 @@
-
 suppressPackageStartupMessages({
   library(dplyr)
   library(survival)
   library(survminer)
   library(ggplot2)
   library(purrr)
-  library(dplyr)
-  library(ggplot2)
   library(patchwork)
 })
 
-
 expr <- read.csv(
-  "/path/to/survival_expression_ml_compiled.csv",
+  "/survival_expression_ml_compiled.csv",
   stringsAsFactors = FALSE,
   check.names = FALSE
 )
@@ -20,30 +16,25 @@ expr <- read.csv(
 expr$sample_id <- gsub("\\.", "-", expr$sample_id)
 expr$sample_id <- substr(expr$sample_id, 1, 12)
 
-
 clinic <- read.csv(
-  "/path/to/cluster_assignments_with_cancertype.csv",
+  "/cluster_assignments_with_cancertype.csv",
   stringsAsFactors = FALSE
 )
 
 clinic$sample_id <- gsub("\\.", "-", clinic$sample_id)
 clinic$sample_id <- substr(clinic$sample_id, 1, 12)
 
-
 data_merged <- inner_join(expr, clinic, by = "sample_id")
-
 
 data_merged <- data_merged %>%
   arrange(sample_id) %>%
   distinct(sample_id, .keep_all = TRUE)
-
 
 stopifnot(!any(duplicated(data_merged$sample_id)))
 stopifnot(!any(is.na(data_merged$sample_id)))
 stopifnot(all(c("CancerType", "time", "status") %in% colnames(data_merged)))
 
 print(table(data_merged$CancerType))
-
 
 run_survival_gene <- function(df, gene) {
   
@@ -77,24 +68,35 @@ run_survival_gene <- function(df, gene) {
   tibble(
     Gene = gene,
     HR = s$coefficients[, "exp(coef)"],
-    pvalue = s$coefficients[, "Pr(>|z|)"],
-    Direction = ifelse(HR < 1, "Higher Survival", "Lower Survival")
+    pvalue = s$coefficients[, "Pr(>|z|)"]
   )
 }
-
 
 gene_list <- setdiff(
   colnames(data_merged),
   c("sample_id", "CancerType", "time", "status")
 )
 
+surv_results <- map_dfr(
+  levels(factor(data_merged$CancerType, levels = c("BRCA", "CC", "OV", "UCEC"))),
+  function(ct) {
+    df_ct <- data_merged %>% filter(CancerType == ct)
+    map_dfr(gene_list, function(g) {
+      res <- run_survival_gene(df_ct, g)
+      if (is.null(res)) return(NULL)
+      res %>% mutate(CancerType = ct)
+    })
+  }
+)
 
 plot_df <- surv_results %>%
   mutate(
     SurvivalGroup = ifelse(HR < 1, "Higher survival", "Lower survival"),
     negLogP = -log10(pvalue),
+    logHR = log2(HR),
     CancerType = factor(CancerType, levels = c("BRCA", "CC", "OV", "UCEC"))
   )
+
 p_high <- ggplot(
   plot_df %>% filter(SurvivalGroup == "Higher survival"),
   aes(
@@ -124,6 +126,7 @@ p_high <- ggplot(
     x = "Cancer type",
     y = "Gene"
   )
+
 p_low <- ggplot(
   plot_df %>% filter(SurvivalGroup == "Lower survival"),
   aes(
@@ -153,21 +156,20 @@ p_low <- ggplot(
     x = "Cancer type",
     y = ""
   )
+
 final_plot <- p_high | p_low
 print(final_plot)
 
-
 ggsave(
-  "/path/to/glycogene_survival_bubbleplot_in_pancancer.tiff",
+  "/glycogene_survival_bubbleplot_in_pancancer.tiff",
   final_plot,
   width = 14,
   height = 12,
-  dpi = 600,
+  dpi = 600
 )
 
 write.csv(
-  data_merged,
-  "/path/to/compiled_63gene_expression_survival.csv",
+  surv_results,
+  "/compiled_63gene_expression_survival.csv",
   row.names = FALSE
 )
-
